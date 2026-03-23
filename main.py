@@ -4,11 +4,11 @@ from PIL import Image
 
 def raw_data_analysis():
     # Example usage
-    vid_path = "videos/citrus_bread_wr.mp4"
+    vid_path = "videos/citrus_bread_wr_blackboxed.mp4"
     output_dir = "output"
 
-    start_time = 5  # in seconds
-    end_time = 171   # in seconds
+    start_time = 0  # in seconds
+    end_time = None   # in seconds
     
     print("Analyzing video...")
     vid_totals = analysis.get_total_yellow_pixels_from_video(vid_path, start_time, end_time)
@@ -22,8 +22,9 @@ def raw_data_analysis():
     print("Results saved.")
 
 def process_raw_data():
-    data_path = "output/citrus_bread_wr_raw_data.txt"
+    data_path = "output/citrus_bread_wr_blackboxed_raw_data.txt"
     processed_image_path = "images"
+    pct_from_average_to_max = 0.5 # how much of the way from the average to the max value should the average color be, as a percentage
     average_display_color = (255, 0, 255) # magenta, easy to see
 
     print("Processing raw data...")
@@ -36,9 +37,11 @@ def process_raw_data():
     os.makedirs(processed_folder_path, exist_ok=True)
 
     max_value = max(max(row) for row in raw_data)
-    average_of_non_zero_values = sum(x for row in raw_data for x in row if x > 0) / sum(1 for row in raw_data for x in row if x > 0)
+    actual_average = sum(x for row in raw_data for x in row if x > 0) / sum(1 for row in raw_data for x in row if x > 0)
+    average_of_non_zero_values = actual_average + pct_from_average_to_max * (max_value - actual_average)
     print(f"Max value: {max_value}")
-    print(f"Average of non-zero values: {average_of_non_zero_values}")
+    print(f"Actual average of non-zero values: {actual_average}")
+    print(f"Used Average of non-zero values: {average_of_non_zero_values}")
 
     # turn the raw data into an array of colors where the color is determined by the value of the raw data at that point, 
     # with 0 being black, 
@@ -90,5 +93,5 @@ def get_color(value, max_value, average_of_non_zero_values, average_display_colo
 
 
 if __name__ == "__main__":
-    # raw_data_analysis()
+    raw_data_analysis()
     process_raw_data()
