@@ -64,8 +64,10 @@ def analyze_video_progression(vid_path, start_time=0, end_time=None):
     frame_count = start_frame
 
     total_frames = end_frame - start_frame
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    frame_counts = [None] * total_frames
+    frame_counts = np.zeros((total_frames, frame_height, frame_width), dtype=np.uint32)
 
     # go frame by frame
     while frame_count < end_frame:
@@ -74,20 +76,13 @@ def analyze_video_progression(vid_path, start_time=0, end_time=None):
         if not ret:
             break
 
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # convert from BGR to RGB
-
         # get the frame's data as a 2D array where its 1 if the frame is mostly yellow and 0 otherwise
-        frame_array = analyze_frame(frame)
+        frame_mask = analyze_frame(frame)
 
-        # update the video frame totals
-        output_array = [[0] * frame.shape[1] for _ in range(frame.shape[0])]
-        for i in range(len(frame_array)):
-            for j in range(len(frame_array[i])):
-                if (frame_count == start_frame):
-                    output_array[i][j] = frame_array[i][j]
-                else:
-                    output_array[i][j] = frame_array[i][j] + frame_counts[frame_count - start_frame - 1][i][j]
-        frame_counts[frame_count - start_frame] = output_array
+        if (frame_count == start_frame):
+            frame_counts[0] = frame_mask
+        else:
+            frame_counts[frame_count - start_frame] = frame_counts[frame_count - start_frame - 1] + frame_mask
         
         frame_count += 1
     print(f"Total Frames:" + str(len(frame_counts)))

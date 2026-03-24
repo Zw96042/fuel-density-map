@@ -30,7 +30,7 @@ def raw_data_analysis():
     print("Results saved.")
 
 def process_raw_data():
-    data_path = vid_path.split("/")[-1].split(".")[0] + "_raw_data.txt"
+    data_path = os.path.join("output", vid_path.split("/")[-1].split(".")[0] + "_raw_data.txt")
     processed_image_path = "images"
 
     print("Processing raw data...")
@@ -70,35 +70,35 @@ def process_raw_data():
     img.save(os.path.join(processed_folder_path, "processed_image_transparent.png"))
     print("Transparent image saved.")
 
-def get_color(value, max_value, average_of_non_zero_values, average_display_color):
-    if value == 0:
-        return (0, 0, 0)  # black
+# def get_color(value, max_value, average_of_non_zero_values, average_display_color):
+#     if value == 0:
+#         return (0, 0, 0)  # black
 
-    if max_value == 0:
-        return average_display_color
+#     if max_value == 0:
+#         return average_display_color
 
-    if value >= max_value:
-        return (255, 255, 255)  # white
+#     if value >= max_value:
+#         return (255, 255, 255)  # white
 
-    # Avoid division by zero
-    if average_of_non_zero_values == 0:
-        return average_display_color
+#     # Avoid division by zero
+#     if average_of_non_zero_values == 0:
+#         return average_display_color
 
-    if value <= average_of_non_zero_values:
-        # gradient from black to average_display_color
-        ratio = value / average_of_non_zero_values
-        return tuple(int(ratio * average_display_color[i]) for i in range(3))
-    else:
-        # gradient from average_display_color to white
-        denom = (max_value - average_of_non_zero_values)
-        if denom == 0:
-            return average_display_color
+#     if value <= average_of_non_zero_values:
+#         # gradient from black to average_display_color
+#         ratio = value / average_of_non_zero_values
+#         return tuple(int(ratio * average_display_color[i]) for i in range(3))
+#     else:
+#         # gradient from average_display_color to white
+#         denom = (max_value - average_of_non_zero_values)
+#         if denom == 0:
+#             return average_display_color
 
-        ratio = (value - average_of_non_zero_values) / denom
-        return tuple(
-            int(average_display_color[i] + ratio * (255 - average_display_color[i]))
-            for i in range(3)
-        )       
+#         ratio = (value - average_of_non_zero_values) / denom
+#         return tuple(
+#             int(average_display_color[i] + ratio * (255 - average_display_color[i]))
+#             for i in range(3)
+#         )       
 
 def create_color_array(raw_data, max_value, average_of_non_zero_values, average_display_color):
     color_array = np.zeros((*raw_data.shape, 3), dtype=np.uint8)
@@ -129,27 +129,30 @@ def create_color_array(raw_data, max_value, average_of_non_zero_values, average_
             ).astype(np.uint8)
 
     color_array[raw_data >= max_value] = 255
+    # print(f"Color array created with shape: {color_array.shape} and pixel range: {color_array.min()} to {color_array.max()}")
     return color_array
  
 def process_into_video_progression():
     frame_counts = analysis.analyze_video_progression(vid_path, start_time, end_time)
-    output_dir = "" #"videos/progression/"
-    output_name = output_dir + vid_path.split("/")[-1].split(".")[0] + "_processed_video.mp4"
+    output_dir = "videos/progression/"
+    output_name = os.path.join(output_dir, vid_path.split("/")[-1].split(".")[0] + "_processed_video.mp4")
+
+    if (not os.path.exists(output_dir)):
+        os.makedirs(output_dir)
 
     print("Processing video progression...")
     # convert the frame counts into color arrays
     frame_color_arrays = []
     for frame_count in frame_counts:
-        print(f"Processing frame {len(frame_color_arrays)}/{len(frame_counts)}", end="\r")
-        max_value = max(max(row) for row in frame_count)
-        average_of_non_zero_values = sum(x for row in frame_count for x in row if x > 0) / sum(1 for row in frame_count for x in row if x > 0)
-        average_of_non_zero_values = average_of_non_zero_values + pct_from_average_to_max * (max_value - average_of_non_zero_values)
-        color_array = []
-        for row in frame_count:
-            color_row = [get_color(value, max_value, average_of_non_zero_values, average_display_color) for value in row]
-            color_array.append(color_row)
+        print(f"Turning Frame into Images {len(frame_color_arrays)}/{len(frame_counts)}", end="\r")
+        max_value = int(frame_count.max())
+        non_zero_values = frame_count[frame_count > 0]
+        actual_average = float(non_zero_values.mean()) if non_zero_values.size else 0.0
+        average_of_non_zero_values = actual_average + pct_from_average_to_max * (max_value - actual_average)
+
+        color_array = create_color_array(frame_count, max_value, average_of_non_zero_values, average_display_color)
         frame_color_arrays.append(color_array)
-    
+    print("Frame color arrays created. Average pixel value: " + str(np.mean(frame_color_arrays)) + ". Range: " + str(np.min(frame_color_arrays)) + " to " + str(np.max(frame_color_arrays)))
     # turn the color arrays and turn them into a video
     video_array = np.array(frame_color_arrays)
     array_to_video(video_array, output_name, fps=30)
@@ -172,6 +175,7 @@ def process_into_video_progression():
     # array_to_video(transparent_video_array, output_name.replace(".mp4", "_transparent.mp4"), fps=30)
 
 def array_to_video(video_array, output_path, fps=30):
+    video_array = np.ascontiguousarray(video_array)
     print("VIDEO ARRAY SHAPE:", video_array.shape)
 
     num_frames, height, width, channels = video_array.shape
@@ -200,6 +204,7 @@ def array_to_video(video_array, output_path, fps=30):
             raise RuntimeError("All codecs failed")
 
     for i in range(num_frames):
+        print(f"Writing frame {i+1}/{num_frames}", end="\r")
         frame_rgb = video_array[i]
 
         # Sanity check
@@ -207,6 +212,7 @@ def array_to_video(video_array, output_path, fps=30):
             raise ValueError(f"Frame shape mismatch: {frame_rgb.shape}")
 
         frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+        # print(f"Frame {i+1} pixel average: {frame_rgb.mean():.2f}", end="\r")
         out.write(frame_bgr)
 
     out.release()
